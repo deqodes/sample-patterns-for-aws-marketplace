@@ -39,10 +39,33 @@ class PatronusEvaluator:
         """
         self.api_key = api_key or os.getenv("PATRONUS_API_KEY")
         self.project_name = project_name
+        # Use mock mode only if API key is not provided
         self.mock_mode = not self.api_key
         
         if self.mock_mode:
-            print("  [Patronus] Running in MOCK mode (no API key provided)")
+            print("  [Patronus] Running in MOCK mode (PATRONUS_API_KEY not set)")
+            self.client = None
+        else:
+            print("  [Patronus] Running in REAL mode with API key")
+            # Try to import and initialize patronus SDK
+            try:
+                import patronus
+                from patronus import Patronus
+                
+                # Initialize Patronus library with API key
+                patronus.init(api_key=self.api_key)
+                
+                # Create Patronus client
+                self.client = Patronus()
+            except ImportError:
+                print("  [Patronus] WARNING: patronus package not installed, falling back to mock mode")
+                self.mock_mode = True
+                self.client = None
+            except Exception as e:
+                print(f"  [Patronus] WARNING: Failed to initialize Patronus client: {e}")
+                print("  [Patronus] Falling back to mock mode")
+                self.mock_mode = True
+                self.client = None
     
     def evaluate(
         self,
@@ -76,12 +99,77 @@ class PatronusEvaluator:
         if self.mock_mode:
             return self._mock_evaluate(task, output, criteria, reference, metadata)
         
-        # Real Patronus API integration would go here
-        # import patronus
-        # client = patronus.Client(api_key=self.api_key)
-        # result = client.evaluate(...)
-        
-        return self._mock_evaluate(task, output, criteria, reference, metadata)
+        # Real Patronus API integration
+        try:
+            # Note: Patronus requires evaluators to be pre-configured in your account
+            # You need to create evaluators via the Patronus UI or API first
+            # For this demo, we'll attempt to use common evaluator names
+            
+            # Try to use a generic evaluator if available
+            # In production, you would specify actual evaluator IDs from your Patronus account
+            print("  [Patronus] NOTE: Patronus requires pre-configured evaluators in your account")
+            print("  [Patronus] Visit https://app.patronus.ai to create evaluators first")
+            print("  [Patronus] Attempting to use generic evaluators...")
+            
+            # Build evaluators list - these need to match evaluator IDs in your Patronus account
+            # Common built-in evaluators: 'judge-consistency', 'judge-relevance', etc.
+            evaluators = []
+            for criterion_name, criterion_desc in criteria.items():
+                # Try using the criterion name as evaluator ID
+                # This will fail if the evaluator doesn't exist in your account
+                evaluators.append(criterion_name)
+            
+            # Call Patronus evaluate
+            result = self.client.evaluate(
+                evaluators=evaluators,
+                task_input=task,
+                task_output=output,
+                gold_answer=reference,
+                task_metadata={
+                    "project": self.project_name,
+                    **(metadata or {}),
+                },
+            )
+            
+            # Extract scores from result
+            scores = {}
+            overall_score = 0
+            if hasattr(result, 'results') and result.results:
+                for eval_result in result.results:
+                    if hasattr(eval_result, 'evaluator_id') and hasattr(eval_result, 'score'):
+                        scores[eval_result.evaluator_id] = eval_result.score
+                        overall_score += eval_result.score
+                if scores:
+                    overall_score = overall_score / len(scores)
+            
+            print("  [Patronus] ✓ Successfully called Patronus API")
+            return {
+                "evaluation_id": getattr(result, 'evaluation_id', f"patronus-{hash(output) % 100000}"),
+                "project": self.project_name,
+                "task": task,
+                "scores": scores if scores else {"overall": 0},
+                "overall_score": overall_score,
+                "pass": overall_score >= 70,
+                "metadata": metadata or {},
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "dashboard_url": f"https://app.patronus.ai/projects/{self.project_name}/evaluations",
+                "mock_mode": False,
+            }
+        except Exception as e:
+            error_msg = str(e)
+            print(f"  [Patronus] ERROR calling API: {e}")
+            print(f"  [Patronus] Error type: {type(e).__name__}")
+            
+            if "not found" in error_msg.lower() or "evaluator" in error_msg.lower():
+                print("  [Patronus] ")
+                print("  [Patronus] To use Patronus in real mode:")
+                print("  [Patronus] 1. Visit https://app.patronus.ai")
+                print("  [Patronus] 2. Create evaluators in your account")
+                print("  [Patronus] 3. Update this code to use your evaluator IDs")
+                print("  [Patronus] ")
+            
+            print("  [Patronus] Falling back to mock mode")
+            return self._mock_evaluate(task, output, criteria, reference, metadata)
     
     def _mock_evaluate(
         self,

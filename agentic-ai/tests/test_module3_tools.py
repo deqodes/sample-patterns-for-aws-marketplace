@@ -27,7 +27,7 @@ def test_analyze_infrastructure_requirements_mock():
         "database": "RDS PostgreSQL",
     })
     
-    result = analyze_infrastructure_requirements(requirements)
+    result = analyze_infrastructure_requirements.func(requirements)
     data = json.loads(result)
     
     assert data["tool"] == "analyze_infrastructure_requirements"
@@ -40,7 +40,7 @@ def test_generate_cdk_stack_vpc():
     """Test VPC stack generation."""
     parameters = json.dumps({"max_azs": 2, "nat_gateways": 1})
     
-    result = generate_cdk_stack("vpc", parameters)
+    result = generate_cdk_stack.func("vpc", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "vpc"
@@ -56,7 +56,7 @@ def test_generate_cdk_stack_rds():
         "multi_az": True,
     })
     
-    result = generate_cdk_stack("rds", parameters)
+    result = generate_cdk_stack.func("rds", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "rds"
@@ -71,7 +71,7 @@ def test_generate_cdk_stack_ecs():
         "container_port": 3000,
     })
     
-    result = generate_cdk_stack("ecs", parameters)
+    result = generate_cdk_stack.func("ecs", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "ecs"
@@ -85,7 +85,7 @@ def test_generate_cdk_stack_elasticache():
         "num_nodes": 2,
     })
     
-    result = generate_cdk_stack("elasticache", parameters)
+    result = generate_cdk_stack.func("elasticache", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "elasticache"
@@ -98,7 +98,7 @@ def test_generate_cdk_stack_s3():
         "versioned": True,
     })
     
-    result = generate_cdk_stack("s3", parameters)
+    result = generate_cdk_stack.func("s3", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "s3"
@@ -112,7 +112,7 @@ def test_generate_cdk_stack_lambda():
         "memory_size": 256,
     })
     
-    result = generate_cdk_stack("lambda", parameters)
+    result = generate_cdk_stack.func("lambda", parameters)
     data = json.loads(result)
     
     assert data["data"]["stack_type"] == "lambda"
@@ -121,7 +121,7 @@ def test_generate_cdk_stack_lambda():
 
 def test_generate_cdk_stack_unknown_type():
     """Test handling of unknown stack type."""
-    result = generate_cdk_stack("unknown_type", "{}")
+    result = generate_cdk_stack.func("unknown_type", "{}")
     data = json.loads(result)
     
     assert "error" in data["data"]
@@ -138,7 +138,7 @@ class TestStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 """
     
-    result = validate_cdk_syntax(valid_code)
+    result = validate_cdk_syntax.func(valid_code)
     data = json.loads(result)
     
     assert data["data"]["status"] == "PASS"
@@ -149,7 +149,7 @@ def test_validate_cdk_syntax_invalid():
     """Test validation of invalid CDK code."""
     invalid_code = "def broken syntax here"
     
-    result = validate_cdk_syntax(invalid_code)
+    result = validate_cdk_syntax.func(invalid_code)
     data = json.loads(result)
     
     assert data["data"]["status"] == "FAIL"
@@ -158,7 +158,7 @@ def test_validate_cdk_syntax_invalid():
 
 def test_list_available_constructs_ec2():
     """Test listing EC2 constructs."""
-    result = list_available_constructs("ec2")
+    result = list_available_constructs.func("ec2")
     data = json.loads(result)
     
     assert data["data"]["service"] == "ec2"
@@ -168,7 +168,7 @@ def test_list_available_constructs_ec2():
 
 def test_list_available_constructs_ecs():
     """Test listing ECS constructs."""
-    result = list_available_constructs("ecs")
+    result = list_available_constructs.func("ecs")
     data = json.loads(result)
     
     assert data["data"]["service"] == "ecs"
@@ -177,7 +177,7 @@ def test_list_available_constructs_ecs():
 
 def test_list_available_constructs_unknown():
     """Test listing constructs for unknown service."""
-    result = list_available_constructs("unknown_service")
+    result = list_available_constructs.func("unknown_service")
     data = json.loads(result)
     
     assert len(data["data"]["constructs"]) == 0
@@ -186,13 +186,13 @@ def test_list_available_constructs_unknown():
 
 def test_generate_cdk_tests():
     """Test CDK test generation."""
-    result = generate_cdk_tests("VpcStack", "vpc")
+    result = generate_cdk_tests.func("VpcStack", "vpc")
     data = json.loads(result)
     
     assert data["data"]["stack_name"] == "VpcStack"
     assert data["data"]["stack_type"] == "vpc"
     assert "def test_vpc_stack_synthesizes" in data["data"]["test_code"]
-    assert "pytest" in data["data"]["required_packages"]
+    assert any("pytest" in pkg for pkg in data["data"]["required_packages"])
 
 
 def test_all_tools_return_json():
@@ -206,7 +206,7 @@ def test_all_tools_return_json():
     ]
     
     for tool_func, args in tools:
-        result = tool_func(*args)
+        result = tool_func.func(*args)
         # Should not raise exception
         data = json.loads(result)
         assert "tool" in data

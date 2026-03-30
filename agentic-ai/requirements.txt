@@ -37,8 +37,11 @@ gitpython>=3.1.40                 # Git repository operations (Module 2)
 pytest>=8.0.0
 
 # ── ISV Partner Integrations (Module 3) ───────────────────────────────────────
-# Note: These are optional. The code includes mock implementations.
-# Uncomment and install if you have API keys for these services.
-# patronus>=0.1.0                 # Patronus AI evaluation
-# deepchecks>=0.18.0              # Deepchecks LLM testing
-# comet-ml>=3.35.0                # Comet ML experiment tracking
+# Note: These are optional. The code will use mock mode if API keys are not provided.
+# Install these packages and set environment variables to enable real integrations:
+#   - PATRONUS_API_KEY for Patronus AI
+#   - DEEPCHECKS_API_KEY for Deepchecks (note: may not have free tier)
+#   - COMET_API_KEY for Comet ML
+patronus>=0.1.0                 # Patronus AI evaluation
+deepchecks>=0.18.0              # Deepchecks LLM testing
+comet-ml>=3.35.0                # Comet ML experiment tracking

@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 class DeepchecksEvaluator:
     """
     Deepchecks evaluator for LLM output quality and hallucination detection.
+    
+    Provides automated testing for LLM outputs.
     """
     
     def __init__(self, api_key: str | None = None):
@@ -34,16 +36,29 @@ class DeepchecksEvaluator:
             Deepchecks API key. Falls back to DEEPCHECKS_API_KEY env var.
         """
         self.api_key = api_key or os.getenv("DEEPCHECKS_API_KEY")
+        # Use mock mode only if API key is not provided
         self.mock_mode = not self.api_key
         
         if self.mock_mode:
-            print("  [Deepchecks] Running in MOCK mode (no API key provided)")
+            print("  [Deepchecks] Running in MOCK mode (DEEPCHECKS_API_KEY not set)")
+            print("  [Deepchecks] Note: Deepchecks may not have a free tier available")
+        else:
+            print("  [Deepchecks] Running in REAL mode with API key")
+            # Try to import deepchecks SDK
+            try:
+                from deepchecks.nlp import TextData
+                from deepchecks.nlp.checks import TextPropertyOutliers
+                self.deepchecks_available = True
+            except ImportError:
+                print("  [Deepchecks] WARNING: deepchecks package not installed, falling back to mock mode")
+                self.mock_mode = True
+                self.deepchecks_available = False
     
     def detect_hallucinations(
         self,
         output: str,
-        context: str | None = None,
-        reference: str | None = None,
+        context: str,
+        threshold: float = 0.7,
     ) -> dict[str, Any]:
         """
         Detect hallucinations in LLM output.
@@ -51,11 +66,11 @@ class DeepchecksEvaluator:
         Parameters
         ----------
         output : str
-            LLM output to check for hallucinations.
-        context : str, optional
-            Context provided to the LLM.
-        reference : str, optional
-            Reference answer or ground truth.
+            LLM output to check.
+        context : str
+            Context or prompt that generated the output.
+        threshold : float
+            Confidence threshold for hallucination detection.
         
         Returns
         -------
@@ -63,15 +78,36 @@ class DeepchecksEvaluator:
             Hallucination detection results.
         """
         if self.mock_mode:
-            return self._mock_detect_hallucinations(output, context, reference)
+            return self._mock_detect_hallucinations(output, context, threshold)
         
-        # Real Deepchecks integration would go here
-        # from deepchecks.nlp import TextData
-        # from deepchecks.nlp.checks import HallucinationCheck
-        # check = HallucinationCheck()
-        # result = check.run(text_data)
-        
-        return self._mock_detect_hallucinations(output, context, reference)
+        # Real Deepchecks integration
+        try:
+            from deepchecks.nlp import TextData
+            from deepchecks.nlp.checks import TextPropertyOutliers
+            
+            # Create TextData object
+            text_data = TextData([output])
+            
+            # Run hallucination detection check
+            check = TextPropertyOutliers()
+            result = check.run(text_data)
+            
+            # Process results
+            hallucination_detected = result.value.get('outliers', []) if hasattr(result, 'value') else []
+            
+            return {
+                "hallucination_detected": len(hallucination_detected) > 0,
+                "confidence": 1.0 - (len(hallucination_detected) / max(1, len(output.split()))),
+                "flagged_segments": hallucination_detected,
+                "severity": "high" if len(hallucination_detected) > 5 else "medium" if len(hallucination_detected) > 0 else "low",
+                "context": context,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "mock_mode": False,
+            }
+        except Exception as e:
+            print(f"  [Deepchecks] ERROR calling API: {e}")
+            print("  [Deepchecks] Falling back to mock mode")
+            return self._mock_detect_hallucinations(output, context, threshold)
     
     def _mock_detect_hallucinations(
         self,

@@ -10,12 +10,16 @@ against defined criteria. This is the core evaluation pattern for Module 3.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 from module3.config.models import get_judge_model
+
+# Mock mode flag
+_MOCK = os.getenv("AGENT_MOCK_REPO", "false").lower() == "true"
 
 
 # ---------------------------------------------------------------------------
@@ -48,26 +52,13 @@ For each criterion, provide a score from 0-100:
 
 ## Response Format
 
-Provide your evaluation as a JSON object:
-
-```json
-{{
-  "scores": {{
-    "criterion_1": 85,
-    "criterion_2": 92,
-    ...
-  }},
-  "overall_score": 88,
-  "rationale": {{
-    "criterion_1": "Brief explanation for this score",
-    "criterion_2": "Brief explanation for this score",
-    ...
-  }},
-  "strengths": ["Strength 1", "Strength 2", ...],
-  "weaknesses": ["Weakness 1", "Weakness 2", ...],
-  "recommendations": ["Recommendation 1", "Recommendation 2", ...]
-}}
-```
+Provide your evaluation as a JSON object with the following structure:
+- scores: object with criterion names as keys and scores (0-100) as values
+- overall_score: average of all criterion scores
+- rationale: object with criterion names as keys and explanations as values
+- strengths: array of strengths identified
+- weaknesses: array of weaknesses identified
+- recommendations: array of recommendations for improvement
 
 Be thorough but concise. Focus on specific, actionable feedback.
 """
@@ -166,29 +157,55 @@ def evaluate_with_llm_judge(
     ... )
     >>> print(result["overall_score"])
     """
-    # Get judge model (Claude Opus, temperature=0.0)
-    judge_model = get_judge_model(region=region)
-    
-    # Create prompt
-    prompt_text = create_judge_prompt(
-        task_description=task_description,
-        agent_output=agent_output,
-        criteria=criteria,
-        reference_answer=reference_answer,
-    )
-    
-    # Create chain
-    prompt = ChatPromptTemplate.from_messages([
-        ("user", prompt_text),
-    ])
-    chain = prompt | judge_model | StrOutputParser()
-    
     if verbose:
         print("  [LLM Judge] Evaluating agent output...")
         print(f"  [Criteria] {len(criteria)} evaluation criteria")
     
-    # Invoke judge
-    response = chain.invoke({})
+    # Mock mode: return synthetic evaluation
+    if _MOCK:
+        if verbose:
+            print("  [LLM Judge] Running in MOCK mode")
+        
+        # Generate mock scores (70-95 range for realistic evaluation)
+        import random
+        random.seed(hash(agent_output) % 2**32)  # Deterministic based on output
+        
+        scores = {name: random.randint(70, 95) for name in criteria.keys()}
+        overall_score = sum(scores.values()) // len(scores)
+        
+        return {
+            "scores": scores,
+            "overall_score": overall_score,
+            "rationale": {name: f"Mock evaluation for {name}" for name in criteria.keys()},
+            "strengths": ["Mock strength 1", "Mock strength 2"],
+            "weaknesses": ["Mock weakness 1"],
+            "recommendations": ["Mock recommendation 1", "Mock recommendation 2"],
+        }
+    
+    # Real mode: call Claude Opus judge
+    # Get judge model (Claude Opus, temperature=0.0)
+    judge_model = get_judge_model(region=region)
+    
+    # Format criteria and reference answer
+    criteria_text = "\n".join(
+        f"- **{name}**: {description}"
+        for name, description in criteria.items()
+    )
+    ref_text = reference_answer if reference_answer else "No reference answer provided."
+    
+    # Create chain with template variables
+    prompt = ChatPromptTemplate.from_messages([
+        ("user", JUDGE_PROMPT_TEMPLATE),
+    ])
+    chain = prompt | judge_model | StrOutputParser()
+    
+    # Invoke judge with variables
+    response = chain.invoke({
+        "task_description": task_description,
+        "agent_output": agent_output,
+        "reference_answer": ref_text,
+        "criteria": criteria_text,
+    })
     
     # Parse JSON response
     try:

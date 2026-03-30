@@ -154,19 +154,20 @@ def section_2_cdk_generation() -> None:
     print("  [Model] Claude Sonnet 4 via Amazon Bedrock")
     print("  [Tools] 5 CDK generation tools\n")
     
-    # Simulate agent execution
-    from module3.tools.cdk_tools import generate_cdk_stack
+    # Simulate agent execution by calling tool functions directly
+    from module3.tools import cdk_tools
     
     print("  🔧 [Step 1] ACT → analyze_infrastructure_requirements(...)")
     print("  ✓  OBSERVE ← Requirements parsed: VPC, RDS PostgreSQL, ECS Fargate\n")
     
     print("  🔧 [Step 2] ACT → generate_cdk_stack(stack_type='vpc', ...)")
-    result = generate_cdk_stack("vpc", json.dumps({"max_azs": 2, "nat_gateways": 1}))
+    # Call the underlying function, not the LangChain tool wrapper
+    result = cdk_tools.generate_cdk_stack.func("vpc", json.dumps({"max_azs": 2, "nat_gateways": 1}))
     vpc_data = json.loads(result)
     print("  ✓  OBSERVE ← VPC stack generated\n")
     
     print("  🔧 [Step 3] ACT → generate_cdk_stack(stack_type='rds', ...)")
-    result = generate_cdk_stack("rds", json.dumps({"engine": "POSTGRES", "multi_az": True}))
+    result = cdk_tools.generate_cdk_stack.func("rds", json.dumps({"engine": "POSTGRES", "multi_az": True}))
     rds_data = json.loads(result)
     print("  ✓  OBSERVE ← RDS stack generated\n")
     

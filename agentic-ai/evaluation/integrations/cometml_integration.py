@@ -28,7 +28,6 @@ class CometMLTracker:
         self,
         api_key: str | None = None,
         project_name: str = "devops-companion-eval",
-        workspace: str | None = None,
     ):
         """
         Initialize Comet ML tracker.
@@ -39,16 +38,33 @@ class CometMLTracker:
             Comet ML API key. Falls back to COMET_API_KEY env var.
         project_name : str
             Project name for organizing experiments.
-        workspace : str, optional
-            Workspace name.
         """
         self.api_key = api_key or os.getenv("COMET_API_KEY")
         self.project_name = project_name
-        self.workspace = workspace or os.getenv("COMET_WORKSPACE", "default")
+        # Use mock mode only if API key is not provided
         self.mock_mode = not self.api_key
+        self.experiments: dict[str, dict] = {}
         
         if self.mock_mode:
-            print("  [Comet ML] Running in MOCK mode (no API key provided)")
+            print("  [Comet ML] Running in MOCK mode (COMET_API_KEY not set)")
+            self.comet_ml = None
+        else:
+            print("  [Comet ML] Running in REAL mode with API key")
+            # Try to import comet_ml SDK
+            try:
+                import comet_ml
+                self.comet_ml = comet_ml
+                # Set API key in environment for Comet ML
+                os.environ["COMET_API_KEY"] = self.api_key
+            except ImportError:
+                print("  [Comet ML] WARNING: comet-ml package not installed, falling back to mock mode")
+                self.mock_mode = True
+                self.comet_ml = None
+            except Exception as e:
+                print(f"  [Comet ML] WARNING: Failed to initialize Comet ML: {e}")
+                print("  [Comet ML] Falling back to mock mode")
+                self.mock_mode = True
+                self.comet_ml = None
         
         self.current_experiment = None
     
@@ -64,11 +80,11 @@ class CometMLTracker:
         Parameters
         ----------
         experiment_name : str
-            Name of the experiment.
+            Name for the experiment.
         tags : list of str, optional
-            Tags for organizing experiments.
+            Tags for categorizing the experiment.
         parameters : dict, optional
-            Experiment parameters (agent version, test suite, etc.).
+            Experiment parameters (model config, hyperparameters, etc.).
         
         Returns
         -------
@@ -78,18 +94,29 @@ class CometMLTracker:
         if self.mock_mode:
             return self._mock_start_experiment(experiment_name, tags, parameters)
         
-        # Real Comet ML integration would go here
-        # from comet_ml import Experiment
-        # experiment = Experiment(
-        #     api_key=self.api_key,
-        #     project_name=self.project_name,
-        #     workspace=self.workspace,
-        # )
-        # experiment.set_name(experiment_name)
-        # experiment.add_tags(tags or [])
-        # experiment.log_parameters(parameters or {})
-        
-        return self._mock_start_experiment(experiment_name, tags, parameters)
+        # Real Comet ML integration
+        try:
+            experiment = self.comet_ml.Experiment(
+                api_key=self.api_key,
+                project_name=self.project_name,
+            )
+            experiment.set_name(experiment_name)
+            if tags:
+                experiment.add_tags(tags)
+            if parameters:
+                experiment.log_parameters(parameters)
+            
+            experiment_id = experiment.get_key()
+            self.experiments[experiment_id] = {
+                "experiment": experiment,
+                "name": experiment_name,
+                "start_time": datetime.now(timezone.utc).isoformat(),
+            }
+            return experiment_id
+        except Exception as e:
+            print(f"  [Comet ML] ERROR starting experiment: {e}")
+            print("  [Comet ML] Falling back to mock mode")
+            return self._mock_start_experiment(experiment_name, tags, parameters)
     
     def _mock_start_experiment(
         self,

@@ -103,55 +103,27 @@ Your job is to classify incoming requests into ONE of the following categories:
 
 ## Response Format
 
-Respond with ONLY a JSON object (no other text):
-
-```json
-{
-  "category": "repository_analysis|infrastructure_generation|aws_infrastructure|deployment_monitoring",
-  "confidence": 0.95,
-  "reasoning": "Brief explanation of why this category was chosen",
-  "clarifying_questions": ["Question 1?", "Question 2?"] or null,
-  "target_agent": "module1|module2|module3|future"
-}
-```
+Respond with ONLY a JSON object (no other text) with these fields:
+- category: one of the four categories above
+- confidence: score from 0.0 to 1.0
+- reasoning: brief explanation of why this category was chosen
+- clarifying_questions: array of questions if confidence < 0.7, otherwise null
+- target_agent: module1, module2, module3, or future
 
 ## Examples
 
+Example 1 - High confidence repository analysis:
 Request: "Analyze the repository at /home/user/myapp"
-Response:
-```json
-{
-  "category": "repository_analysis",
-  "confidence": 0.98,
-  "reasoning": "Clear request to analyze a repository",
-  "clarifying_questions": null,
-  "target_agent": "module2"
-}
-```
+Category: repository_analysis, Confidence: 0.98, Target: module2
 
+Example 2 - High confidence infrastructure generation:
 Request: "Generate CDK for a Node.js app with PostgreSQL and Redis"
-Response:
-```json
-{
-  "category": "infrastructure_generation",
-  "confidence": 0.95,
-  "reasoning": "Request to generate infrastructure code with specific requirements",
-  "clarifying_questions": null,
-  "target_agent": "module3"
-}
-```
+Category: infrastructure_generation, Confidence: 0.95, Target: module3
 
+Example 3 - Medium confidence with clarification needed:
 Request: "Check my services"
-Response:
-```json
-{
-  "category": "aws_infrastructure",
-  "confidence": 0.65,
-  "reasoning": "Likely checking existing AWS services, but unclear which services",
-  "clarifying_questions": ["Which AWS services do you want to check?", "What region are they in?"],
-  "target_agent": "module1"
-}
-```
+Category: aws_infrastructure, Confidence: 0.65, Target: module1
+Clarifying questions: Which AWS services? What region?
 
 Now classify the following request:
 """
